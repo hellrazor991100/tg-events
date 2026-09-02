@@ -24,7 +24,12 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-        run: node scripts/parse_post.js
+        run: |
+          if [ -f scripts/parse_post.js ]; then
+            node scripts/parse_post.js
+          else
+            node tg-events/scripts/parse_post.js
+          fi
 
       - name: Commit and push changes
         run: |
