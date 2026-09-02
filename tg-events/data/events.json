@@ -1,0 +1,38 @@
+[
+  {
+    "id": "1",
+    "title": "Gwarki 2026 — Święto Miasta",
+    "date": "11.09.2026",
+    "time": "17:00",
+    "location": "Rynek, Tarnowskie Góry",
+    "category": "plener",
+    "price": "Bezpłatne",
+    "isFree": true,
+    "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600",
+    "sourceUrl": "https://tck.net.pl"
+  },
+  {
+    "id": "2",
+    "title": "Wieczór Jazzowy w TCK",
+    "date": "18.09.2026",
+    "time": "19:00",
+    "location": "Tarnogórskie Centrum Kultury",
+    "category": "muzyka",
+    "price": "od 40 zł",
+    "isFree": false,
+    "imageUrl": "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600",
+    "sourceUrl": "https://tck.net.pl"
+  },
+  {
+    "id": "3",
+    "title": "Nocne Zwiedzanie Kopalni Srebra",
+    "date": "25.09.2026",
+    "time": "20:00",
+    "location": "Zabytkowa Kopalnia Srebra",
+    "category": "kultura",
+    "price": "60 zł",
+    "isFree": false,
+    "imageUrl": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=600",
+    "sourceUrl": "https://kopalniasrebra.pttk.pl"
+  }
+]
