@@ -2,9 +2,7 @@ name: Auto Fetch TG Events
 
 on:
   schedule:
-    # Uruchamia się codziennie o 03:00 UTC (4:00 rano czasu polskiego)
     - cron: '0 3 * * *'
-  # Pozwala na ręczne uruchomienie z zakładki Actions
   workflow_dispatch:
 
 jobs:
@@ -23,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd tg-events
-          npm ci || npm install
+          npm install
 
       - name: Run parser scripts
         env:
