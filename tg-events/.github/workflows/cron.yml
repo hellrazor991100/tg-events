@@ -18,13 +18,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies and run scripts
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run parser scripts
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          cd tg-events
-          npm install apify-client @google/generative-ai axios cheerio dotenv
           node scripts/parse_post.js
           node scripts/scrape_websites.js
 
