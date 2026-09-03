@@ -5,10 +5,6 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: ./tg-events
-
 jobs:
   fetch-events:
     runs-on: ubuntu-latest
@@ -22,14 +18,13 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies directly
-        run: npm install apify-client @google/generative-ai axios cheerio dotenv
-
-      - name: Run parser scripts
+      - name: Install dependencies and run scripts
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
+          cd tg-events
+          npm install apify-client @google/generative-ai axios cheerio dotenv
           node scripts/parse_post.js
           node scripts/scrape_websites.js
 
