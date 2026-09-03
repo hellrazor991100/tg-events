@@ -18,10 +18,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install dependencies explicitly
         run: |
           cd tg-events
-          npm install
+          npm install apify-client @google/generative-ai axios cheerio dotenv
 
       - name: Run parser scripts
         env:
