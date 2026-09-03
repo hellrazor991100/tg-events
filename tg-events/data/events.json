@@ -12,18 +12,6 @@
     "sourceUrl": "https://tck.net.pl"
   },
   {
-    "id": "2",
-    "title": "Wieczór Jazzowy w TCK",
-    "date": "18.09.2026",
-    "time": "19:00",
-    "location": "Tarnogórskie Centrum Kultury",
-    "category": "muzyka",
-    "price": "od 40 zł",
-    "isFree": false,
-    "imageUrl": "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600",
-    "sourceUrl": "https://tck.net.pl"
-  },
-  {
     "id": "3",
     "title": "Nocne Zwiedzanie Kopalni Srebra",
     "date": "25.09.2026",
