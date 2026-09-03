@@ -1,58 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { ApifyClient } from 'apify-client';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Bezpieczne ładowanie .env na środowisku lokalnym (nie zgłasza błędu na GitHub Actions)
-try {
-  const dotenv = await import('dotenv');
-  dotenv.config();
-} catch (e) {
-  // Ignoruj w środowisku CI/CD, gdzie zmienne są przekazywane z Secrets
-}
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Weryfikacja wymaganych kluczy API
-const APIFY_TOKEN = process.env.APIFY_TOKEN;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-if (!APIFY_TOKEN || !GEMINI_API_KEY) {
-  console.error('BŁĄD: Brak wymaganych zmiennych środowiskowych APIFY_TOKEN lub GEMINI_API_KEY.');
-  process.exit(1);
-}
-
-// Inicjalizacja klientów API
-const apifyClient = new ApifyClient({ token: APIFY_TOKEN });
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-// Lista stron/profilu do scrapowania (możesz tu dodać kolejne profile FB)
-const FB_PAGES = [
-  'https://www.facebook.com/TarnogorskieCentrumKultury'
-];
-
-/**
- * Uruchamia scraper Apify w celu pobrania najnowszych postów z Facebooka
- */
-async function fetchFacebookPosts() {
-  console.log('Fetching posts from Facebook via Apify...');
-  
-  // Używamy oficjalnego scrapera Apify do Facebook Posts
-  const run = await apifyClient.actor('apify/facebook-posts-scraper').call({
-    startUrls: FB_PAGES.map(url => ({ url })),
-    resultsLimit: 10, // Pobieramy 10 najnowszych postów
-  });
-
-  const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
-  console.log(`Fetched ${items.length} raw posts from Facebook.`);
-  return items;
-}
-
-/**
- * Przetwarza tekst posta za pomocą Gemini API i zwraca ustrukturyzowany obiekt wydarzenia
- */
 async function parsePostWithGemini(postText, postUrl) {
   if (!postText || postText.trim().length < 20) return null;
 
@@ -88,5 +33,26 @@ ${postText}
     const result = await model.generateContent(prompt);
     const responseText = result.response.text().trim();
     
-    // Czyszczenie ewentualnych znaczników markdown
-    const cleanJson = responseText.replace(/```json/g, '').replace(/
+    // Czyszczenie znaczników markdown (bezpieczne rozbicie na linie)
+    const cleanJson = responseText
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
+
+    const parsedData = JSON.parse(cleanJson);
+
+    if (parsedData.isEvent) {
+      delete parsedData.isEvent;
+      return {
+        id: Buffer.from(postUrl || String(Date.now())).toString('base64').substring(0, 12),
+        ...parsedData,
+        sourceUrl: postUrl || null,
+        updatedAt: new Date().toISOString()
+      };
+    }
+  } catch (error) {
+    console.error('Błąd podczas przetwarzania posta przez Gemini:', error.message);
+  }
+
+  return null;
+}
