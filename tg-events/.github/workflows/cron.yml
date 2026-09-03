@@ -2,12 +2,15 @@ name: Auto Fetch TG Events
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    # Uruchamia się codziennie o 03:00 UTC (4:00 rano czasu polskiego)
+    - cron: '0 3 * * *'
+  # Pozwala na ręczne uruchomienie z zakładki Actions
   workflow_dispatch:
 
 jobs:
   fetch-events:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -15,22 +18,32 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          cd tg-events
+          npm ci || npm install
 
-      - name: Run post parser
+      - name: Run parser scripts
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-        run: node scripts/parse_post.js
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          cd tg-events
+          node scripts/parse_post.js
+          node scripts/scrape_websites.js
 
-      - name: Commit and push changes
+      - name: Commit and push updated events
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/events.json
-          git commit -m "chore: auto-update events.json [skip ci]" || exit 0
-          git push
-
+          
+          git add .
+          
+          if git diff --staged --quiet; then
+            echo "Brak nowych zmian w wydarzeniach."
+          else
+            git commit -m "chore: auto-update events from FB and web [skip ci]"
+            git push
+          fi
