@@ -1,118 +1,92 @@
-require('dotenv').config({ path: '.env.local' });
-const fs = require('fs');
-const path = require('path');
-const { ApifyClient } = require('apify-client');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { ApifyClient } from 'apify-client';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Bezpieczne ładowanie .env na środowisku lokalnym (nie zgłasza błędu na GitHub Actions)
+try {
+  const dotenv = await import('dotenv');
+  dotenv.config();
+} catch (e) {
+  // Ignoruj w środowisku CI/CD, gdzie zmienne są przekazywane z Secrets
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Weryfikacja wymaganych kluczy API
 const APIFY_TOKEN = process.env.APIFY_TOKEN;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-const TARGET_PAGES = [
-  "https://facebook.com/barpraha",
-  "https://facebook.com/onyxmusicclub",
-  "https://facebook.com/undergroundpubtg"
+if (!APIFY_TOKEN || !GEMINI_API_KEY) {
+  console.error('BŁĄD: Brak wymaganych zmiennych środowiskowych APIFY_TOKEN lub GEMINI_API_KEY.');
+  process.exit(1);
+}
+
+// Inicjalizacja klientów API
+const apifyClient = new ApifyClient({ token: APIFY_TOKEN });
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// Lista stron/profilu do scrapowania (możesz tu dodać kolejne profile FB)
+const FB_PAGES = [
+  'https://www.facebook.com/TarnogorskieCentrumKultury'
 ];
 
-async function parsePostWithGemini(postContent, sourceUrl) {
-  if (!GEMINI_API_KEY) return null;
-
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-  const prompt = `
-Jesteś filtrem wydarzeń dla portalu TG Events (Tarnowskie Góry).
-Analizujesz tekst wpisu z Facebooka.
-
-ZASADY:
-1. Sprawdź czy post dotyczy KONKRETNEGO WYDARZENIA z datą i godziną (koncert, impreza, pub quiz, warsztaty).
-2. Jeśli post dotyczy TYLKO MENU, jedzenia, piwa, promocji gastronomicznej lub godzin otwarcia - ZWRÓĆ DOKŁADNIE: null.
-3. Jeśli to wydarzenie, zwróć WYŁĄCZNIE czysty obiekt JSON (bez markdowna).
-
-FORMAT JSON:
-{
-  "id": "${Date.now()}-${Math.floor(Math.random() * 1000)}",
-  "title": "Tytuł wydarzenia",
-  "date": "DD.MM.YYYY",
-  "time": "HH:MM",
-  "location": "Lokalizacja w Tarnowskich Górach",
-  "category": "plener | muzyka | kultura",
-  "price": "Cena lub Bezpłatne",
-  "isFree": true/false,
-  "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600",
-  "sourceUrl": "${sourceUrl}"
-}
-
-Tekst: "${postContent.replace(/"/g, "'")}"
-`;
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-    });
-
-    const data = await response.json();
-    if (!data.candidates || !data.candidates[0].content) return null;
-
-    const rawText = data.candidates[0].content.parts[0].text.trim();
-    if (rawText === "null" || rawText.includes("null")) return null;
-
-    const cleanedJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanedJson);
-  } catch (err) {
-    return null;
-  }
-}
-
-async function run() {
-  console.log("🚀 Pobieranie żywych postów z FB przez Apify + Gemini AI...\n");
+/**
+ * Uruchamia scraper Apify w celu pobrania najnowszych postów z Facebooka
+ */
+async function fetchFacebookPosts() {
+  console.log('Fetching posts from Facebook via Apify...');
   
-  if (!APIFY_TOKEN) {
-    console.error("❌ Brak APIFY_TOKEN w .env.local!");
-    return;
-  }
-
-  const client = new ApifyClient({ token: APIFY_TOKEN });
-  const eventsPath = path.join(__dirname, '../data/events.json');
-  let currentEvents = [];
-
-  try {
-    currentEvents = JSON.parse(fs.readFileSync(eventsPath, 'utf8'));
-  } catch (e) {
-    currentEvents = [];
-  }
-
-  // Uruchomienie bezpiecznego scrapera FB na Apify
-  const run = await client.actor("apify/facebook-posts-scraper").call({
-    startUrls: TARGET_PAGES.map(url => ({ url })),
-    resultsLimit: 3
+  // Używamy oficjalnego scrapera Apify do Facebook Posts
+  const run = await apifyClient.actor('apify/facebook-posts-scraper').call({
+    startUrls: FB_PAGES.map(url => ({ url })),
+    resultsLimit: 10, // Pobieramy 10 najnowszych postów
   });
 
-  const { items } = await client.dataset(run.defaultDatasetId).listItems();
-  let addedCount = 0;
-
-  for (const item of items) {
-    const text = item.text || item.caption || "";
-    const url = item.url || "https://facebook.com";
-
-    if (!text) continue;
-
-    console.log(`🔎 Analiza posta z: ${url}`);
-    const event = await parsePostWithGemini(text, url);
-
-    if (event) {
-      const exists = currentEvents.some(e => e.title === event.title && e.date === event.date);
-      if (!exists) {
-        currentEvents.push(event);
-        addedCount++;
-        console.log(`  ✨ DODANO WYDARZENIE: "${event.title}" (${event.date})`);
-      }
-    } else {
-      console.log(`  ❌ Odrzucono (menu/promocja)`);
-    }
-  }
-
-  fs.writeFileSync(eventsPath, JSON.stringify(currentEvents, null, 2));
-  console.log(`\n🎉 Zakończono! Dodano nowych wydarzeń: ${addedCount}`);
+  const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+  console.log(`Fetched ${items.length} raw posts from Facebook.`);
+  return items;
 }
 
-run();
+/**
+ * Przetwarza tekst posta za pomocą Gemini API i zwraca ustrukturyzowany obiekt wydarzenia
+ */
+async function parsePostWithGemini(postText, postUrl) {
+  if (!postText || postText.trim().length < 20) return null;
+
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+  const prompt = `
+Przeanalizuj poniższy tekst posta z Facebooka i ustal, czy dotyczy on konkretnego wydarzenia (koncert, wystawa, warsztaty, spektakl, spotkanie itp.).
+
+Jeśli tekst opisuje wydarzenie, wyciągnij z niego informacje i zwróć WYŁĄCZNIE czysty obiekt JSON (bez markdowna, bez \`\`\`json) o strukturze:
+{
+  "isEvent": true,
+  "title": "Tytuł wydarzenia",
+  "date": "Data wydarzenia w formacie RRRR-MM-DD (jeśli brak roku, załóż bieżący)",
+  "time": "Godzina rozpoczęcia, np. 18:00 (lub null)",
+  "location": "Miejsce wydarzenia (np. TCK Tarnowskie Góry)",
+  "description": "Krótki, atrakcyjny opis wydarzenia (2-3 zdania)",
+  "category": "Kategoria, np. Koncert, Teatr, Warsztaty, Wystawa, Inne",
+  "price": "Cena biletu / wstęp wolny (lub null)"
+}
+
+Jeśli tekst NIE jest wydarzeniem (np. powitanie, życzenia, zwykły komunikat, podziękowania), zwróć:
+{
+  "isEvent": false
+}
+
+Tekst do analizy:
+"""
+${postText}
+"""
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text().trim();
+    
+    // Czyszczenie ewentualnych znaczników markdown
+    const cleanJson = responseText.replace(/```json/g, '').replace(/
